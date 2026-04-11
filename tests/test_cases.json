@@ -1,0 +1,11 @@
+{
+  "_comment": "Test bench for task5_speller_api. OWNER: Mohamed Nady (work package M2). TODO: fill with at least 12 cases covering prefix lengths 1/2/3, three distinct contexts (casual chat with a friend, formal email to a professor, ordering food at a restaurant), ambiguous prefixes (th, a), awkward prefixes (xy, qz), and empty-context cases. For each case write a plain-English description of what a 'good' output looks like — do NOT assert exact strings, LLM outputs vary.",
+  "cases": [
+    {
+      "name": "2-letter formal email (seed example)",
+      "prefix": "he",
+      "context": "writing an email to my professor",
+      "good_output": "Three common English words starting with 'he' in a formal register, e.g. 'hello', 'hope', 'help'."
+    }
+  ]
+}
