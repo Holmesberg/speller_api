@@ -45,6 +45,18 @@ cp .env.example .env                                   # then edit .env and past
 
 See **`KEY_SETUP.md`** for the end-to-end OpenAI account + key walkthrough.
 
+### Provider setup (OpenAI or Google AI Studio)
+
+- **OpenAI (default):** set `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`).
+- **Google AI Studio (Gemini):** set `OPENAI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, put your Gemini key into `OPENAI_API_KEY`, and set `OPENAI_MODEL` to a compatible Gemini model (e.g. `gemini-3-flash-preview`).
+
+Upstream docs (kept current by the providers):
+
+- OpenAI API keys: https://platform.openai.com/api-keys
+- OpenAI API quickstart: https://developers.openai.com/api/docs/quickstart
+- Gemini API keys (Google AI Studio): https://aistudio.google.com/app/apikey
+- Gemini OpenAI compatibility: https://ai.google.dev/gemini-api/docs/openai
+
 ## Run
 
 ```bash
@@ -63,10 +75,10 @@ predict_words("he", context="writing an email to my professor")
 
 ## Docs
 
-| Doc                 | Audience              | What's in it                                         |
-|---------------------|-----------------------|------------------------------------------------------|
-| `INTEGRATION.md`    | Unity UI team         | Function signature, error model, latency envelope, sequence diagram, mocking guide |
-| `KEY_SETUP.md`      | Anyone on the team    | Step-by-step OpenAI account / key / spending-cap walkthrough |
-| `LATENCY.md`        | Future-us (v0.2+)     | Ten concrete ways to reduce per-call latency         |
-| `ACCURACY.md`       | Future-us (v0.2+)     | Ten concrete ways to improve prediction quality      |
-| `DESIGN_NOTES.md`   | Whole project team    | Forward-looking design (WBS 4.1 hook, FastAPI sketch) |
+| Doc               | Audience           | What's in it                                                                       |
+| ----------------- | ------------------ | ---------------------------------------------------------------------------------- |
+| `INTEGRATION.md`  | Unity UI team      | Function signature, error model, latency envelope, sequence diagram, mocking guide |
+| `KEY_SETUP.md`    | Anyone on the team | Step-by-step OpenAI account / key / spending-cap walkthrough                       |
+| `LATENCY.md`      | Future-us (v0.2+)  | Ten concrete ways to reduce per-call latency                                       |
+| `ACCURACY.md`     | Future-us (v0.2+)  | Ten concrete ways to improve prediction quality                                    |
+| `DESIGN_NOTES.md` | Whole project team | Forward-looking design (WBS 4.1 hook, FastAPI sketch)                              |
