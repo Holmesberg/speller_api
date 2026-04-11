@@ -81,8 +81,13 @@ def predict_words(
         context=context or "(no context provided)",
     )
 
+    # Let RuntimeError from a missing key propagate so the UI learns at
+    # startup, not via a silent fallback list. Only network / API errors
+    # from the completion call itself are converted to degraded mode.
+    client = get_client()
+
     try:
-        response = get_client().chat.completions.create(
+        response = client.chat.completions.create(
             model=_MODEL,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
