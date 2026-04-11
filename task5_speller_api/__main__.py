@@ -5,13 +5,14 @@ Example:
     python -m task5_speller_api he --context "writing an email to my professor"
     → ["hello", "hope", "help"]
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import sys
 
-from .speller import predict_words
+from .speller import API
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,7 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        words = predict_words(args.prefix, context=args.context)
+        api = API()
+        words = api.predict_words(topic=args.context, prefix=args.prefix, sentence="")
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

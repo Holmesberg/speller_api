@@ -3,7 +3,8 @@
 Public entry point is `predict_words`. See `speller.py` for the full contract
 and `INTEGRATION.md` for the UI-side integration guide.
 """
-from .speller import predict_words
+
+from .speller import API
 
 __all__ = ["predict_words"]
 __version__ = "0.1.0"

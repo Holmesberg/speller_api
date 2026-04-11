@@ -5,6 +5,7 @@ require a key (tests can stub it) but every `predict_words` call after the
 first reuses a single warm TCP/TLS connection. See LATENCY.md §"Persistent
 client + connection pool".
 """
+
 from __future__ import annotations
 
 import os
@@ -29,6 +30,41 @@ def _load_api_key() -> str:
     return key
 
 
+def _load_base_url() -> str | None:
+    """Optional base URL override.
+
+    Supports:
+    - `OPENAI_API_BASE_URL` (repo convention)
+    - `OPENAI_BASE_URL` (OpenAI SDK convention)
+
+    Leave unset to use the OpenAI SDK default (OpenAI).
+    """
+    base_url = (
+        os.environ.get("OPENAI_API_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or ""
+    ).strip()
+    return base_url or None
+
+
 @lru_cache(maxsize=1)
 def get_client() -> OpenAI:
+    base_url = _load_base_url()
+    if base_url:
+        return OpenAI(
+            api_key=_load_api_key(),
+            base_url=base_url,
+            timeout=_CLIENT_TIMEOUT_SECONDS,
+        )
     return OpenAI(api_key=_load_api_key(), timeout=_CLIENT_TIMEOUT_SECONDS)
+
+
+def get_response(client, system_prompt: str, user_message: str) -> str:
+    response = client.chat.completions.create(
+        model=os.getenv("OPENAI_MODEL"),
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+    )
+    if not response.choices or not response.choices[0].message.content:
+        raise ValueError(f"Received empty response: {response.output_text}")
+    return response.choices[0].message.content
