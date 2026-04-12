@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         api = API()
-        words = api.predict_words(topic=args.context, prefix=args.prefix, sentence="")
+        words = api.predict_words(context=args.context, prefix=args.prefix, sentence="")
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

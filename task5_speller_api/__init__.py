@@ -6,5 +6,5 @@ and `INTEGRATION.md` for the UI-side integration guide.
 
 from .speller import API
 
-__all__ = ["predict_words"]
+__all__ = ["API"]
 __version__ = "0.1.0"

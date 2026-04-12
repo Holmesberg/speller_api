@@ -58,13 +58,16 @@ def get_client() -> OpenAI:
 
 
 def get_response(client, system_prompt: str, user_message: str) -> str:
-    response = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL"),
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ],
-    )
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+        )
+    except Exception as e:
+        raise RuntimeError(f"OpenAI API request failed: {e}") from e
     if not response.choices or not response.choices[0].message.content:
         raise ValueError(f"Received empty response: {response.output_text}")
     return response.choices[0].message.content

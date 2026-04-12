@@ -63,6 +63,9 @@ class API:
         except (json.JSONDecodeError, ValueError) as exc:
             logger.warning("Could not parse model output %r: %s", raw, exc)
             return list(self._FALLBACK_WORDS)
+        except RuntimeError as exc:
+            logger.warning("Error during model response parsing: %s", exc)
+            return list(self._FALLBACK_WORDS)
 
         cleaned = [str(w).strip().lower() for w in words if str(w).strip()]
         cleaned = cleaned[: self._N_PREDICTIONS]
@@ -126,7 +129,8 @@ class API:
                 user_message=user_message,
             )
         except (
-            ValueError
+            ValueError,
+            RuntimeError,
         ) as exc:  # noqa: BLE001 — any transport/API error -> degraded mode
             logger.warning(exc)
             return list(self._FALLBACK_WORDS)
