@@ -39,6 +39,10 @@ class API:
     and you will predict the next word in the sentence based on the context,
     or a common English word if the prefix is too vague.
     Your response should be the most likely next words in the sentence formed by the prefix.
+    If the prefix is empty, predict the most likely next word based on the context and sentence.
+    If the sentence is empty, predict the most likely next word to start a sentence based on the prefix and context (like I: I, It, Is).
+    If both senetence and prefix are empty, your predictions should include at least: an "article" to start a sentence, or a "question word" to start a question.
+    
     Input format: prediction_count = <prediction_count>, context = <context>, prefix = <prefix>, sentence = <sentence>
     Only return a json object with a "predictions" field containing a list of three words, like this:
     {"predictions": ["word1", "word2", "word3"]}
@@ -140,10 +144,45 @@ class API:
 
 # for single file testing
 if __name__ == "__main__":
+    import time
+    time_before = time.perf_counter()
+
+    tests = [
+        {
+            "context": "football",
+            "prefix": "ch",
+            "sentence": "Bareclona is the ",
+        },
+        {
+            "context": "technology",
+            "prefix": "br",  # bright
+            "sentence": "The future of AI is ",
+        },
+        {
+            "context": "food",
+            "prefix": "p",
+            "sentence": "I want to cook ",
+        },
+
+    ]
+
     api = API()
-    for word in api.predict_words(
-        context="technology",
-        prefix="br",  # bright
-        sentence="The future of AI is ",
-    ):
+    word1list = api.predict_words(
+        context=tests[2]["context"],
+        prefix=tests[2]["prefix"],
+        sentence=tests[2]["sentence"],
+    )
+    time_after = time.perf_counter()
+    print(f"Time taken: {time_after - time_before:.2f} seconds")
+    for word in word1list:
         print(word)
+
+    # for word2 in word1list:
+    #     list2 = api.predict_words(
+    #     context="football",
+    #     prefix="ch" + word2[2],  # bright
+    #     sentence="Bareclona is the "
+    #     )
+    #     print("Expected next words: 'champion', 'champions', 'Chelsea' (or similar, based on the context and prefix)")
+    #     for word3 in list2:
+    #         print(word3)
