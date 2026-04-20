@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "task5-speller-api"
+version = "0.1.0"
+description = "BCI predictive speller backend — prefix + context → 3 complete word predictions via an OpenAI-compatible LLM (Groq by default)."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Ali Nasser" },
+    { name = "Mohamed Nady" },
+]
+license = { text = "MIT" }
+dependencies = [
+    "openai>=2.31.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+task5-speller = "task5_speller_api.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["task5_speller_api*"]
+exclude = ["tests*"]

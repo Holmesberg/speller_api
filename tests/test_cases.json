@@ -1,11 +1,221 @@
 {
-  "_comment": "Test bench for task5_speller_api. OWNER: Mohamed Nady (work package M2). TODO: fill with at least 12 cases covering prefix lengths 1/2/3, three distinct contexts (casual chat with a friend, formal email to a professor, ordering food at a restaurant), ambiguous prefixes (th, a), awkward prefixes (xy, qz), and empty-context cases. For each case write a plain-English description of what a 'good' output looks like — do NOT assert exact strings, LLM outputs vary.",
+  "_comment": "Test bench for task5_speller_api, v0.2 — Lyra-aware. Each case fixes a BCI prefix plus a synthetic Lyra runtime state, and asserts that the top prediction is a Lyra vocabulary word (command verb, entity noun, state word, or category) rather than a generic English word. LLM outputs vary, so cases carry `acceptable_top_3` for tolerance. See DESIGN_NOTES.md §7 for the integration design this file tests against.",
+  "_owner": "Mohamed Nady (M2)",
+  "_harness_contract": "Runner sets per-case lyra_state and calls predict_words(prefix, context, sentence, lyra_context=lyra_state). PASS if result[0] == expected_top_word OR result[0] in acceptable_top_3. Cases with `lyra_state: null` are prose-mode (no vocabulary injection) and must still return a reasonable general-English word.",
+  "schema_version": 2,
+  "lyra_vocabulary": {
+    "_note": "Mirror of task5_speller_api/lyra_vocab.py (to be added — see DESIGN_NOTES.md §7). If one changes, change both. Source of truth in Lyra: backend/app/api/v1/endpoints/tasks.py (verbs), backend/app/db/models.py (states), backend/app/db/seed.py (categories).",
+    "command_verbs": [
+      "create", "schedule", "reschedule", "delete", "skip", "void", "swap",
+      "start", "stop", "pause", "resume", "clear", "sync", "query", "undo"
+    ],
+    "entity_nouns": [
+      "task", "stopwatch", "session", "category", "schedule", "reflection", "notification"
+    ],
+    "state_words": [
+      "planned", "executing", "paused", "executed", "skipped", "abandoned"
+    ],
+    "categories": [
+      "fitness", "academic", "study", "development", "meeting", "prayer",
+      "network", "personal", "health", "work"
+    ]
+  },
   "cases": [
     {
-      "name": "2-letter formal email (seed example)",
-      "prefix": "he",
-      "context": "writing an email to my professor",
-      "good_output": "Three common English words starting with 'he' in a formal register, e.g. 'hello', 'hope', 'help'."
+      "name": "sc → schedule (planning mode, user anchor example)",
+      "prefix": "sc",
+      "sentence": "",
+      "context": "user is composing a command in Lyra; no active stopwatch; several tasks planned for today",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": ["work", "study"],
+        "hot_verbs": ["create", "schedule", "reschedule"]
+      },
+      "expected_top_word": "schedule",
+      "acceptable_top_3": ["schedule", "scan", "screen"],
+      "rationale": "Prefix `sc` matches Lyra's canonical `schedule` verb. Bias must beat generic English candidates (`school`, `scene`)."
+    },
+    {
+      "name": "t → task (planning mode, user anchor example)",
+      "prefix": "t",
+      "sentence": "",
+      "context": "user is issuing a command in Lyra; no active stopwatch",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": ["academic"],
+        "hot_verbs": ["create", "schedule"]
+      },
+      "expected_top_word": "task",
+      "acceptable_top_3": ["task", "today", "time"],
+      "rationale": "Single-letter `t` is maximally ambiguous in English (the/to/this/that). Bias to Lyra's primary entity noun `task` whenever the caller is in command-mode."
+    },
+    {
+      "name": "st → start (pre-stopwatch, user anchor example)",
+      "prefix": "st",
+      "sentence": "",
+      "context": "user is about to begin a planned task; no stopwatch running yet",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": ["fitness"],
+        "hot_verbs": ["start", "create"]
+      },
+      "expected_top_word": "start",
+      "acceptable_top_3": ["start", "study", "stop"],
+      "rationale": "Classic context-sensitive case. Same prefix maps to `start` when no stopwatch is running and to `stop` when one is (see next case)."
+    },
+    {
+      "name": "st → stop (executing, demonstrates state-dependent bias)",
+      "prefix": "st",
+      "sentence": "",
+      "context": "stopwatch is currently running on a fitness task",
+      "lyra_state": {
+        "active_stopwatch": {"task_title": "Gym - legs", "category": "fitness"},
+        "pending_categories": ["fitness"],
+        "hot_verbs": ["stop", "pause"]
+      },
+      "expected_top_word": "stop",
+      "acceptable_top_3": ["stop", "start", "status"],
+      "rationale": "Identical prefix to previous case, different lyra_state → different top word. This is the core of 'task-governed' prediction."
+    },
+    {
+      "name": "pa → pause (executing)",
+      "prefix": "pa",
+      "sentence": "",
+      "context": "stopwatch running",
+      "lyra_state": {
+        "active_stopwatch": {"task_title": "Deep work - thesis", "category": "academic"},
+        "pending_categories": [],
+        "hot_verbs": ["pause", "stop"]
+      },
+      "expected_top_word": "pause",
+      "acceptable_top_3": ["pause", "past", "paper"]
+    },
+    {
+      "name": "re → resume (paused)",
+      "prefix": "re",
+      "sentence": "",
+      "context": "paused session; user returning",
+      "lyra_state": {
+        "active_stopwatch": {"task_title": "Deep work - thesis", "category": "academic", "paused": true},
+        "pending_categories": [],
+        "hot_verbs": ["resume", "stop"]
+      },
+      "expected_top_word": "resume",
+      "acceptable_top_3": ["resume", "return", "reschedule"]
+    },
+    {
+      "name": "re → reschedule (planning)",
+      "prefix": "re",
+      "sentence": "",
+      "context": "user is reorganising today's schedule",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": ["work", "meeting"],
+        "hot_verbs": ["reschedule", "delete", "swap"]
+      },
+      "expected_top_word": "reschedule",
+      "acceptable_top_3": ["reschedule", "resume", "reset"],
+      "rationale": "Prefix `re` resolves to `resume` when paused, `reschedule` when planning. Hot-verb list disambiguates."
+    },
+    {
+      "name": "sk → skip (planning, deciding not to do a task)",
+      "prefix": "sk",
+      "sentence": "",
+      "context": "user is deciding to abandon a planned task without starting it",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": ["fitness"],
+        "hot_verbs": ["skip", "delete"]
+      },
+      "expected_top_word": "skip",
+      "acceptable_top_3": ["skip", "sky", "ski"]
+    },
+    {
+      "name": "de → delete (planning)",
+      "prefix": "de",
+      "sentence": "",
+      "context": "user wants to remove a task entirely",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": [],
+        "hot_verbs": ["delete", "clear"]
+      },
+      "expected_top_word": "delete",
+      "acceptable_top_3": ["delete", "default", "done"]
+    },
+    {
+      "name": "un → undo (just made a mistake)",
+      "prefix": "un",
+      "sentence": "",
+      "context": "user just created or deleted a task and wants to revert; undo window is 30s",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": [],
+        "hot_verbs": ["undo"]
+      },
+      "expected_top_word": "undo",
+      "acceptable_top_3": ["undo", "until", "under"]
+    },
+    {
+      "name": "me → meeting (category noun, composing a task title)",
+      "prefix": "me",
+      "sentence": "Team ",
+      "context": "user is typing the title of a new task; office setting",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": ["work", "meeting"],
+        "hot_verbs": ["create"]
+      },
+      "expected_top_word": "meeting",
+      "acceptable_top_3": ["meeting", "memo", "message"],
+      "rationale": "Prose-mode within a command: the speller is composing a task title. Category bias (`meeting` is a Lyra category) should still beat generic English."
+    },
+    {
+      "name": "fi → fitness (category noun, composing)",
+      "prefix": "fi",
+      "sentence": "Morning ",
+      "context": "user is titling a new morning task",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": ["fitness", "health"],
+        "hot_verbs": ["create"]
+      },
+      "expected_top_word": "fitness",
+      "acceptable_top_3": ["fitness", "first", "finish"]
+    },
+    {
+      "name": "empty prefix → article/question-starter (no Lyra state)",
+      "prefix": "",
+      "sentence": "",
+      "context": "",
+      "lyra_state": null,
+      "expected_top_word": "the",
+      "acceptable_top_3": ["the", "a", "what"],
+      "rationale": "Mohamed's prompt explicitly handles empty prefix + empty sentence → article or question word. No Lyra bias applies."
+    },
+    {
+      "name": "pure prose with sentence context (no Lyra bias)",
+      "prefix": "pr",
+      "sentence": "Writing a reply to my ",
+      "context": "composing a personal email, outside Lyra command flow",
+      "lyra_state": null,
+      "expected_top_word": "professor",
+      "acceptable_top_3": ["professor", "parent", "partner"],
+      "rationale": "When the caller is composing prose (not issuing a Lyra command), speller must still return good general English. `lyra_state=null` signals prose-mode."
+    },
+    {
+      "name": "noisy prefix (non-alpha) → graceful degraded mode",
+      "prefix": "3s",
+      "sentence": "",
+      "context": "BCI misfire; prefix contains a non-alphabetic character",
+      "lyra_state": {
+        "active_stopwatch": null,
+        "pending_categories": [],
+        "hot_verbs": ["start", "schedule"]
+      },
+      "expected_top_word": "start",
+      "acceptable_top_3": ["start", "schedule", "the"],
+      "rationale": "Relaxed validation (see INTEGRATION.md §4): non-alpha does not raise. Expect hot-verb fallback when the alpha suffix `s` matches a hot verb's stem."
     }
   ]
 }

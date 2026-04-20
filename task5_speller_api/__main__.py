@@ -12,25 +12,31 @@ import argparse
 import json
 import sys
 
-from .speller import API
+from .speller import predict_words
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m task5_speller_api",
-        description="Predict three complete words from a 1-3 letter prefix.",
+        description="Predict three complete words from a BCI-emitted prefix.",
     )
-    parser.add_argument("prefix", help="1-3 alphabetic characters")
+    parser.add_argument("prefix", help="letters committed so far (usually 1-3)")
     parser.add_argument(
         "--context",
         default="",
         help="Optional scenario context, e.g. 'ordering food at a restaurant'",
     )
+    parser.add_argument(
+        "--sentence",
+        default="",
+        help="Optional sentence being composed up to the current word",
+    )
     args = parser.parse_args(argv)
 
     try:
-        api = API()
-        words = api.predict_words(context=args.context, prefix=args.prefix, sentence="")
+        words = predict_words(
+            prefix=args.prefix, context=args.context, sentence=args.sentence
+        )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

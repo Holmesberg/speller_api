@@ -1,8 +1,9 @@
 # task5_speller_api
 
-Backend Python API for the Brain↔ChatGPT BCI project. Takes a 1–3 letter prefix
-from the Unity speller grid and returns three predicted complete English words
-via the OpenAI API, ready to be rendered as SSVEP-selectable targets.
+Backend Python API for the Brain↔ChatGPT BCI project. Takes a letter prefix
+(typically 1–3 chars) from the Unity speller grid and returns three predicted
+complete English words via an OpenAI-compatible LLM endpoint (Groq by
+default), ready to be rendered as SSVEP-selectable targets.
 
 **Scope:** BR41N.IO Hackathon Prep · Assignment 1 · Task 5. v0.1 ships as a
 callable Python function, a CLI smoke-test, and a FastAPI endpoint for web integration.
@@ -43,11 +44,13 @@ pip install -r requirements.txt
 cp .env.example .env                                   # then edit .env and paste your key
 ```
 
-See **`KEY_SETUP.md`** for the end-to-end OpenAI account + key walkthrough.
+See **`KEY_SETUP.md`** for the end-to-end account + key walkthrough.
 
-### Provider setup (OpenAI, Google AI Studio, or Local LLM)
+### Provider setup (Groq default · also OpenAI, Gemini, or Local LLM)
 
-- **OpenAI (default):** set `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`).
+The client uses the OpenAI Python SDK pointed at whichever OpenAI-compatible endpoint `OPENAI_API_BASE_URL` names. Two providers are documented:
+
+- **Groq (default):** set `OPENAI_API_BASE_URL=https://api.groq.com/openai/v1`, put your Groq key into `OPENAI_API_KEY`, and set `OPENAI_MODEL` (e.g. `llama-3.3-70b-versatile`).
 - **Google AI Studio (Gemini):** set `OPENAI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, put your Gemini key into `OPENAI_API_KEY`, and set `OPENAI_MODEL` to a compatible Gemini model (e.g. `gemini-3-flash-preview`).
 - **Local LLM (llama.cpp):** Ensure you have llama.cpp running, then set the `.env` variables to point to your local server.
 
@@ -65,8 +68,8 @@ OPENAI_MODEL=gemma4
 
 Upstream docs (kept current by the providers):
 
-- OpenAI API keys: https://platform.openai.com/api-keys
-- OpenAI API quickstart: https://developers.openai.com/api/docs/quickstart
+- Groq API keys: https://console.groq.com/keys
+- Groq OpenAI compatibility: https://console.groq.com/docs/openai
 - Gemini API keys (Google AI Studio): https://aistudio.google.com/app/apikey
 - Gemini OpenAI compatibility: https://ai.google.dev/gemini-api/docs/openai
 
@@ -143,7 +146,7 @@ Content-Type: application/json
 | Doc               | Audience           | What's in it                                                                       |
 | ----------------- | ------------------ | ---------------------------------------------------------------------------------- |
 | `INTEGRATION.md`  | Unity UI team      | Function signature, error model, latency envelope, sequence diagram, mocking guide |
-| `KEY_SETUP.md`    | Anyone on the team | Step-by-step OpenAI account / key / spending-cap walkthrough                       |
+| `KEY_SETUP.md`    | Anyone on the team | Step-by-step account / key / spending-cap walkthrough (OpenAI-era; see README for Groq setup) |
 | `LATENCY.md`      | Future-us (v0.2+)  | Ten concrete ways to reduce per-call latency                                       |
 | `ACCURACY.md`     | Future-us (v0.2+)  | Ten concrete ways to improve prediction quality                                    |
 | `DESIGN_NOTES.md` | Whole project team | Forward-looking design (WBS 4.1 hook, FastAPI sketch)                              |

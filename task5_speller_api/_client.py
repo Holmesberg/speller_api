@@ -1,9 +1,12 @@
-"""OpenAI client construction and API-key loading.
+"""LLM client construction and API-key loading.
 
 The client is built lazily and cached, so importing this module does not
 require a key (tests can stub it) but every `predict_words` call after the
 first reuses a single warm TCP/TLS connection. See LATENCY.md §"Persistent
 client + connection pool".
+
+Provider is selected by `OPENAI_API_BASE_URL`. Groq is the documented
+default (see `.env.example`); any OpenAI-compatible endpoint works.
 """
 
 from __future__ import annotations
@@ -17,15 +20,16 @@ from openai import OpenAI
 load_dotenv()
 
 _CLIENT_TIMEOUT_SECONDS = 5.0
+_DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 
 def _load_api_key() -> str:
     key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key or key.startswith("sk-replace"):
+    if not key or key.endswith("-replace-me"):
         raise RuntimeError(
             "OPENAI_API_KEY is missing. Copy .env.example to .env and paste "
-            "your OpenAI key into it. See KEY_SETUP.md for a step-by-step "
-            "walkthrough including the $10 monthly spending cap."
+            "your provider key (Groq by default). See KEY_SETUP.md for the "
+            "walkthrough."
         )
     return key
 
@@ -37,7 +41,7 @@ def _load_base_url() -> str | None:
     - `OPENAI_API_BASE_URL` (repo convention)
     - `OPENAI_BASE_URL` (OpenAI SDK convention)
 
-    Leave unset to use the OpenAI SDK default (OpenAI).
+    Leave unset to use the OpenAI SDK default.
     """
     base_url = (
         os.environ.get("OPENAI_API_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or ""
@@ -60,14 +64,14 @@ def get_client() -> OpenAI:
 def get_response(client, system_prompt: str, user_message: str) -> str:
     try:
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL"),
+            model=os.getenv("OPENAI_MODEL", _DEFAULT_MODEL),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
         )
     except Exception as e:
-        raise RuntimeError(f"OpenAI API request failed: {e}") from e
+        raise RuntimeError(f"LLM API request failed: {e}") from e
     if not response.choices or not response.choices[0].message.content:
-        raise ValueError(f"Received empty response: {response.output_text}")
+        raise ValueError("Received empty response from model")
     return response.choices[0].message.content

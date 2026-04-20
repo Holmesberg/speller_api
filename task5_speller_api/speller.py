@@ -298,6 +298,38 @@ class API:
 
 
 # ---------------------------------------------------------------------------
+# Module-level convenience wrapper
+#
+# Preserves the stable import path documented in INTEGRATION.md:
+#     from task5_speller_api import predict_words
+# Unity UI callers (and the Proj2 WebSocket backend) depend on this import
+# path. The wrapper lazy-instantiates one API() so repeated calls share a
+# warm client.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_API: "API | None" = None
+
+
+def predict_words(
+    prefix: str = "",
+    context: str = "",
+    sentence: str = "",
+    mental_state: Optional[str] = None,
+) -> list[str]:
+    """Module-level wrapper over `API.predict_words`.
+
+    `mental_state` is accepted for signature stability (WBS 4.1 — see
+    DESIGN_NOTES.md §1 and §7.5) but is currently ignored.
+    """
+    global _DEFAULT_API
+    if _DEFAULT_API is None:
+        _DEFAULT_API = API()
+    return _DEFAULT_API.predict_words(
+        prefix=prefix, context=context, sentence=sentence
+    )
+
+
+# ---------------------------------------------------------------------------
 # Smoke test
 # ---------------------------------------------------------------------------
 
