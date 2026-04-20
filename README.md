@@ -17,6 +17,7 @@ speller_api/
 │   ├── __init__.py         # re-exports predict_words
 │   ├── __main__.py         # CLI entry (python -m task5_speller_api)
 │   ├── _client.py          # OpenAI client + API-key loader
+│   ├── server.py           # FastAPI endpoint
 │   └── speller.py          # predict_words() — public contract
 ├── tests/
 │   └── test_cases.json     # M2 test bench (Mohamed)
@@ -73,10 +74,12 @@ Upstream docs (kept current by the providers):
 
 ```bash
 # Start the local FastAPI server for web integration
-uv run uvicorn task5_speller_api.server:app --reload
+python -m uvicorn task5_speller_api.server:app --reload
+# Or (if uvicorn is installed globally)
+uvicorn task5_speller_api.server:app --reload
 
 # Or run the CLI smoke test
-uv run python -m task5_speller_api he --context "writing an email to my professor"
+python -m task5_speller_api he --context "writing an email to my professor"
 # → ["hello", "hope", "help"]
 ```
 
