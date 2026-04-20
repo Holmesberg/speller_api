@@ -5,8 +5,7 @@ from the Unity speller grid and returns three predicted complete English words
 via the OpenAI API, ready to be rendered as SSVEP-selectable targets.
 
 **Scope:** BR41N.IO Hackathon Prep · Assignment 1 · Task 5. v0.1 ships as a
-callable Python function plus a CLI smoke-test. A FastAPI/WebSocket endpoint is
-explicitly out of scope for this milestone — see `DESIGN_NOTES.md`.
+callable Python function, a CLI smoke-test, and a FastAPI endpoint for web integration.
 
 Owners: **Ali Nasser** (repo, core script, integration/latency docs) · **Mohamed Nady** (prompt design, test bench, accuracy writeup, key-setup guide).
 
@@ -45,10 +44,23 @@ cp .env.example .env                                   # then edit .env and past
 
 See **`KEY_SETUP.md`** for the end-to-end OpenAI account + key walkthrough.
 
-### Provider setup (OpenAI or Google AI Studio)
+### Provider setup (OpenAI, Google AI Studio, or Local LLM)
 
 - **OpenAI (default):** set `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`).
 - **Google AI Studio (Gemini):** set `OPENAI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, put your Gemini key into `OPENAI_API_KEY`, and set `OPENAI_MODEL` to a compatible Gemini model (e.g. `gemini-3-flash-preview`).
+- **Local LLM (llama.cpp):** Ensure you have llama.cpp running, then set the `.env` variables to point to your local server.
+
+**Example `.env` for Local LLMs:**
+```dotenv
+OPENAI_API_BASE_URL=http://localhost:8080/v1
+OPENAI_API_KEY=sk-no-key-required
+OPENAI_MODEL=gemma4
+```
+
+**Example command to run a local server:**
+```bash
+.\llama-server.exe -m "F:\LLMs\gemma-4-E2B-it-RotorQuant-IQ4_XS.gguf" --cache-type-k q8_0 --cache-type-v q8_0 -ngl 99 -fa on --jinja --temp 1.0 --top_p 0.95 --top_k 64
+```
 
 Upstream docs (kept current by the providers):
 
@@ -60,7 +72,11 @@ Upstream docs (kept current by the providers):
 ## Run
 
 ```bash
-python -m task5_speller_api he --context "writing an email to my professor"
+# Start the local FastAPI server for web integration
+uv run uvicorn task5_speller_api.server:app --reload
+
+# Or run the CLI smoke test
+uv run python -m task5_speller_api he --context "writing an email to my professor"
 # → ["hello", "hope", "help"]
 ```
 
@@ -71,6 +87,52 @@ from task5_speller_api import predict_words
 
 predict_words("he", context="writing an email to my professor")
 # → ['hello', 'hope', 'help']
+```
+
+## API Endpoint
+
+### POST `/predict`
+
+Accepts a JSON payload:
+
+```
+{
+  "prefix": "<optional prefix string>",
+  "sentence": "<optional sentence string>",
+  "context": "<optional context string>"
+}
+```
+
+Returns:
+
+```
+{
+  "predictions": ["word1", "word2", "word3"]
+}
+```
+
+- All fields are optional, but at least one should be provided for meaningful predictions.
+- The endpoint enforces the prefix constraint and capitalization rules as described above.
+
+**Example request:**
+
+```
+POST http://localhost:8000/predict
+Content-Type: application/json
+
+{
+  "prefix": "ch",
+  "sentence": "Barcelona is the",
+  "context": "football"
+}
+```
+
+**Example response:**
+
+```
+{
+  "predictions": ["Champions", "Chelsea", "Choice"]
+}
 ```
 
 ## Docs
