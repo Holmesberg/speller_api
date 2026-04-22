@@ -34,7 +34,16 @@ speller_api/
 └── ACCURACY.md             # accuracy suggestions writeup (Mohamed, M3)
 ```
 
-## Install
+## Architecture
+
+### Dual-Model Design
+
+**v0.1** uses a split-brain approach:
+
+- **Speller Model** (cheap, fast): Groq `llama-3.3-70b-versatile` by default. Predicts the next 3 words from a BCI prefix—optimized for latency and cost.
+- **Response Model** (smart, contextual): Google Gemini by default. Generates rich, conversational replies to fully-typed sentences—optimized for quality and personality.
+
+Both use OpenAI-compatible endpoints, so you can swap providers independently. See `DESIGN_NOTES.md` §1 for the forward-looking rationale.
 
 ```bash
 git clone https://github.com/Holmesberg/speller_api.git
@@ -94,10 +103,17 @@ python -m task5_speller_api --simulate --output logs/my_session.json
 Or in Python:
 
 ```python
-from task5_speller_api import predict_words
+from task5_speller_api import predict_words, respond_to_sentence
 
 predict_words("he", context="writing an email to my professor")
 # → ['hello', 'hope', 'help']
+
+# Generate a contextual response (model decides when to search)
+respond_to_sentence(
+    "I'm interested in learning Python",
+    context="education"
+)
+# → "That's great! Python is an excellent language to start with..."
 ```
 
 ### Real-time simulator mode
@@ -125,6 +141,26 @@ The simulator writes a JSON report containing:
   - selected word
   - prediction latency in milliseconds
 - `final_sentence`
+- `response` (model's contextual response to final sentence)
+
+### Response generation
+
+The `respond_to_sentence()` function uses the smarter response model (Gemini by default) to generate contextual replies.
+
+```python
+from task5_speller_api import respond_to_sentence
+
+response = respond_to_sentence("What time is it?", context="")
+# → "The current time depends on your location and timezone..."
+
+response = respond_to_sentence(
+    "How is AI changing healthcare?",
+    context="medical technology"
+)
+# → "AI is revolutionizing healthcare in several key areas. Recent developments include..."
+```
+
+The response uses the model's built-in knowledge to generate thoughtful, conversational replies.
 
 ## API Endpoint
 

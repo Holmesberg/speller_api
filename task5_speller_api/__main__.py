@@ -15,7 +15,7 @@ import os
 import sys
 import time
 
-from .speller import API, predict_words
+from .speller import API, predict_words, respond_to_sentence
 
 
 def _utc_now_iso() -> str:
@@ -176,6 +176,14 @@ def _run_simulator(output_path: str | None) -> int:
         print("\nSession interrupted. Saving results so far...")
 
     session_ended_at = _utc_now_iso()
+    
+    response = ""
+    if sentence:
+        try:
+            response = api.respond(sentence, context=topic)
+        except Exception as e:
+            print(f"warning: failed to get response: {e}", file=sys.stderr)
+    
     report = {
         "topic": topic,
         "started_at": session_started_at,
@@ -183,6 +191,7 @@ def _run_simulator(output_path: str | None) -> int:
         "event_count": len(events),
         "events": events,
         "final_sentence": sentence,
+        "response": response,
     }
 
     parent = os.path.dirname(report_path)
@@ -191,6 +200,11 @@ def _run_simulator(output_path: str | None) -> int:
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
+    if response:
+        print("\nModel Response:")
+        print("-" * 40)
+        print(response)
+        print("-" * 40)
     print(f"Saved simulation report to: {report_path}")
     return 0
 
@@ -226,10 +240,27 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Optional output JSON path for --simulate mode",
     )
+    parser.add_argument(
+        "--respond",
+        default="",
+        help="Generate a contextual response to the given sentence",
+    )
     args = parser.parse_args(argv)
 
     if args.simulate:
         return _run_simulator(args.output or None)
+
+    if args.respond:
+        try:
+            response = respond_to_sentence(args.respond, context=args.context)
+            print(response)
+            return 0
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 3
 
     if not args.prefix:
         parser.error("prefix is required unless --simulate is used")

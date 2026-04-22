@@ -87,7 +87,7 @@ _PROMPT_FIXER = (
 
 
 class API:
-    _N_PREDICTIONS = 4
+    _N_PREDICTIONS = 3
     # Fallback used only when model fails AND wordlist has no prefix match.
     # Deliberately generic — callers should treat this as degraded mode.
     _FALLBACK_WORDS = ("the", "and", "of")
@@ -162,15 +162,62 @@ class API:
         return predictions[: self._N_PREDICTIONS]
 
     def final_answer(self, context: str, sentence: str) -> str:
-        """Generate a final free-text response based on full sentence and context."""
-        system = (
-            "You are a helpful assistant for a BCI speller. Given the user's intent "
-            "(context) and their fully-typed sentence, generate a relevant and "
-            "engaging response to display in the UI. The response should be concise "
-            "and directly related to the user's input."
+        """Generate a final free-text response based on full sentence and context.
+        
+        Uses the response model to create a natural, conversational reply.
+        
+        Args:
+            context: High-level scenario/intent (e.g., "medical question").
+            sentence: The fully-typed user sentence.
+        
+        Returns:
+            A natural language response string. Returns empty string on failure.
+        """
+        return self.respond(sentence, context)
+
+    def respond(
+        self,
+        sentence: str,
+        context: str = "",
+    ) -> str:
+        """Generate a contextual response to a completed user sentence.
+        
+        Uses the response model to understand the user's intent
+        and generate a meaningful, conversational reply.
+        
+        Args:
+            sentence: The user's completed sentence.
+            context: Optional high-level context (e.g., topic, scenario).
+        
+        Returns:
+            A natural, contextual response string. Returns empty string on failure.
+        """
+        if not sentence or not sentence.strip():
+            logger.warning("Empty sentence passed to respond")
+            return ""
+        
+        system_prompt = (
+            "You are a helpful, friendly assistant responding to a user in a conversational context. "
+            "Your job is to provide accurate, thoughtful replies to what they say. "
+            "Keep responses concise (2–3 sentences) unless the context requires more detail. "
+            "Be conversational, supportive, and ask follow-up questions when appropriate."
         )
-        user   = f"context: {context.strip() or '(no context)'}\nsentence: {sentence.strip()}"
-        return self._safe_call(self.response_client, system, user) or ""
+        user_message = f"User said: \"{sentence}\"\n"
+        if context:
+            user_message += f"Context: {context}\n"
+        user_message += "Please respond naturally and helpfully."
+        
+        try:
+            response = get_response(
+                self.response_client,
+                system_prompt=system_prompt,
+                user_message=user_message,
+                llm_type="RESPONSE",
+            )
+            return response.strip()
+        except (ValueError, RuntimeError) as exc:
+            logger.warning("Response generation failed: %s", exc)
+            return ""
 
     # ------------------------------------------------------------------
     # Agents — one prompt per task
@@ -291,7 +338,7 @@ class API:
         """
         system = _PROMPT_FIXER.format(n=missing_count, prefix=prefix.lower())
         user   = f"prefix: {prefix.lower()}"
-        return self._safe_call(system, user)
+        return self._safe_call(self.speller_client, system, user)
 
     def _apply_capitalization(self, predictions: list[str], sentence: str) -> list[str]:
         """Capitalize if predictions will start a new sentence; lowercase otherwise.
@@ -310,12 +357,12 @@ class API:
 
 
 # ---------------------------------------------------------------------------
-# Module-level convenience wrapper
+# Module-level convenience wrappers
 #
-# Preserves the stable import path documented in INTEGRATION.md:
-#     from task5_speller_api import predict_words
-# Unity UI callers (and the Proj2 WebSocket backend) depend on this import
-# path. The wrapper lazy-instantiates one API() so repeated calls share a
+# Preserves the stable import paths documented in INTEGRATION.md:
+#     from task5_speller_api import predict_words, respond_to_sentence
+# Unity UI callers (and the Proj2 WebSocket backend) depend on these import
+# paths. The wrappers lazy-instantiate one API() so repeated calls share a
 # warm client.
 # ---------------------------------------------------------------------------
 
@@ -339,6 +386,28 @@ def predict_words(
     return _DEFAULT_API.predict_words(
         prefix=prefix, context=context, sentence=sentence
     )
+
+
+def respond_to_sentence(
+    sentence: str,
+    context: str = "",
+) -> str:
+    """Module-level wrapper over `API.respond`.
+    
+    Generate a contextual response to a completed user sentence using the
+    response model. The model decides whether to search for recent information.
+    
+    Args:
+        sentence: The user's completed sentence.
+        context: Optional high-level context (e.g., topic, scenario).
+    
+    Returns:
+        A natural, contextual response string.
+    """
+    global _DEFAULT_API
+    if _DEFAULT_API is None:
+        _DEFAULT_API = API()
+    return _DEFAULT_API.respond(sentence=sentence, context=context)
 
 
 # ---------------------------------------------------------------------------

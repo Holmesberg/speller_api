@@ -39,10 +39,16 @@ def _mock_llm_response(content: str | None) -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def _patch_env_and_client(monkeypatch):
-    """Fresh OpenAI client mock + valid fake key for every test."""
-    monkeypatch.setenv("OPENAI_API_KEY", "gsk-test-key-for-unit-tests")
-    monkeypatch.setenv("OPENAI_API_BASE_URL", "https://example.invalid/v1")
-    monkeypatch.setenv("OPENAI_MODEL", "test-model")
+    """Fresh OpenAI client mock + valid fake keys for both SPELLER and RESPONSE."""
+    # Speller model setup
+    monkeypatch.setenv("SPELLER_API_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("SPELLER_API_KEY", "gsk-test-speller-key")
+    monkeypatch.setenv("SPELLER_MODEL", "test-speller-model")
+    
+    # Response model setup
+    monkeypatch.setenv("RESPONSE_API_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("RESPONSE_API_KEY", "gsk-test-response-key")
+    monkeypatch.setenv("RESPONSE_MODEL", "test-response-model")
 
     from task5_speller_api import _client, speller
 
@@ -221,24 +227,32 @@ def test_non_string_prefix_is_coerced_not_raised(_patch_env_and_client):
 def test_missing_key_raises_runtime_error(monkeypatch):
     from task5_speller_api import _client, speller
 
-    monkeypatch.setenv("OPENAI_API_KEY", "")
+    # Clear the env for SPELLER only, leave RESPONSE intact so __init__ doesn't fail
+    monkeypatch.setenv("SPELLER_API_KEY", "")
+    monkeypatch.setenv("RESPONSE_API_KEY", "gsk-test-response-key")
+    monkeypatch.setenv("RESPONSE_API_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("RESPONSE_MODEL", "test-response-model")
     _client.get_client.cache_clear()
     speller._DEFAULT_API = None
 
     from task5_speller_api import predict_words
 
-    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+    with pytest.raises(RuntimeError, match="SPELLER_API_KEY"):
         predict_words(prefix="he")
 
 
 def test_placeholder_key_raises_runtime_error(monkeypatch):
     from task5_speller_api import _client, speller
 
-    monkeypatch.setenv("OPENAI_API_KEY", "gsk-replace-me")
+    # Placeholder key for SPELLER, valid key for RESPONSE
+    monkeypatch.setenv("SPELLER_API_KEY", "gsk-replace-me")
+    monkeypatch.setenv("RESPONSE_API_KEY", "gsk-test-response-key")
+    monkeypatch.setenv("RESPONSE_API_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("RESPONSE_MODEL", "test-response-model")
     _client.get_client.cache_clear()
     speller._DEFAULT_API = None
 
     from task5_speller_api import predict_words
 
-    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+    with pytest.raises(RuntimeError, match="SPELLER_API_KEY"):
         predict_words(prefix="he")

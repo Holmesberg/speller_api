@@ -1,12 +1,11 @@
 """LLM client construction and API-key loading.
 
-The client is built lazily and cached, so importing this module does not
-require a key (tests can stub it) but every `predict_words` call after the
-first reuses a single warm TCP/TLS connection. See LATENCY.md §"Persistent
-client + connection pool".
+Supports dual-model architecture:
+  - SPELLER model: cheap, fast word completion (Groq by default)
+  - RESPONSE model: smart, contextual sentence responses (Gemini by default)
 
-Provider is selected by `OPENAI_API_BASE_URL`. Groq is the documented
-default (see `.env.example`); any OpenAI-compatible endpoint works.
+Both use OpenAI-compatible endpoints. Clients are cached, warm, and share a
+TCP/TLS connection pool. See LATENCY.md §"Persistent client + connection pool".
 """
 
 from __future__ import annotations
@@ -19,8 +18,9 @@ from openai import OpenAI
 
 load_dotenv()
 
-_CLIENT_TIMEOUT_SECONDS = 5.0
-_DEFAULT_MODEL = "llama-3.3-70b-versatile"
+_CLIENT_TIMEOUT_SECONDS = 15.0
+_DEFAULT_SPELLER_MODEL = "llama-3.3-70b-versatile"
+_DEFAULT_RESPONSE_MODEL = "gemini-3-flash-preview"
 
 
 def _load_api_key(llm_type: str = "SPELLER") -> str:
@@ -49,21 +49,21 @@ def _load_base_url(llm_type: str = "SPELLER") -> str | None:
     return base_url or None
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=2)
 def get_client(llm_type: str = "SPELLER") -> OpenAI:
+    """Get a cached OpenAI client for the specified LLM type (SPELLER or RESPONSE)."""
     base_url = _load_base_url(llm_type)
-    client = OpenAI(api_key=_load_api_key(llm_type), timeout=_CLIENT_TIMEOUT_SECONDS)
-    if base_url:
-        client = OpenAI(
-            api_key=_load_api_key(llm_type),
-            base_url=base_url,
-            timeout=_CLIENT_TIMEOUT_SECONDS,
-        )
+    client = OpenAI(
+        api_key=_load_api_key(llm_type),
+        base_url=base_url,
+        timeout=_CLIENT_TIMEOUT_SECONDS,
+    )
     if "localhost" in (base_url or ""):
-        # warm up
+        # warm up local instance
+        model = _get_model_for_type(llm_type)
         try:
             client.chat.completions.create(
-                model=_DEFAULT_MODEL,
+                model=model,
                 messages=[{"role": "system", "content": "ping"}],
             )
         except Exception as e:
@@ -71,17 +71,49 @@ def get_client(llm_type: str = "SPELLER") -> OpenAI:
     return client
 
 
-def get_response(client, system_prompt: str, user_message: str) -> str:
+def _get_model_for_type(llm_type: str = "SPELLER") -> str:
+    """Load model name for the given LLM type from environment."""
+    if llm_type == "RESPONSE":
+        return os.getenv("RESPONSE_MODEL", _DEFAULT_RESPONSE_MODEL)
+    return os.getenv("SPELLER_MODEL", _DEFAULT_SPELLER_MODEL)
+
+
+def get_response(
+    client: OpenAI,
+    system_prompt: str,
+    user_message: str,
+    llm_type: str | None = None,
+) -> str:
+    """Call an LLM with system prompt and user message.
+    
+    Args:
+        client: OpenAI client to use.
+        system_prompt: System context for the model.
+        user_message: User input to respond to.
+        llm_type: Which model to use (SPELLER or RESPONSE). If None, uses SPELLER.
+    
+    Returns:
+        The model's response text.
+    """
+    if llm_type is None:
+        llm_type = "SPELLER"
+    model = _get_model_for_type(llm_type)
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+    
     try:
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", _DEFAULT_MODEL),
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
+            model=model,
+            messages=messages,
         )
+        
+        # Extract final text response
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content
+        raise ValueError("Received empty response from model")
+        
     except Exception as e:
         raise RuntimeError(f"LLM API request failed: {e}") from e
-    if not response.choices or not response.choices[0].message.content:
-        raise ValueError("Received empty response from model")
-    return response.choices[0].message.content
