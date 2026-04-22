@@ -52,13 +52,23 @@ def _load_base_url() -> str | None:
 @lru_cache(maxsize=1)
 def get_client() -> OpenAI:
     base_url = _load_base_url()
+    client = OpenAI(api_key=_load_api_key(), timeout=_CLIENT_TIMEOUT_SECONDS)
     if base_url:
-        return OpenAI(
+        client = OpenAI(
             api_key=_load_api_key(),
             base_url=base_url,
             timeout=_CLIENT_TIMEOUT_SECONDS,
         )
-    return OpenAI(api_key=_load_api_key(), timeout=_CLIENT_TIMEOUT_SECONDS)
+    if "localhost" in (base_url or ""):
+        # warm up
+        try:
+            client.chat.completions.create(
+                model=_DEFAULT_MODEL,
+                messages=[{"role": "system", "content": "ping"}],
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to warm up local LLM API: {e}") from e
+    return client
 
 
 def get_response(client, system_prompt: str, user_message: str) -> str:
