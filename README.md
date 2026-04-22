@@ -84,6 +84,11 @@ uvicorn task5_speller_api.server:app --reload
 # Or run the CLI smoke test
 python -m task5_speller_api he --context "writing an email to my professor"
 # → ["hello", "hope", "help"]
+
+# Or run the real-time quality simulator (Windows terminal)
+python -m task5_speller_api --simulate
+# Optional custom output path
+python -m task5_speller_api --simulate --output logs/my_session.json
 ```
 
 Or in Python:
@@ -94,6 +99,32 @@ from task5_speller_api import predict_words
 predict_words("he", context="writing an email to my professor")
 # → ['hello', 'hope', 'help']
 ```
+
+### Real-time simulator mode
+
+The simulator is designed for BCI recommendation quality testing:
+
+- You enter one topic/context for the session.
+- As you type each letter, recommendations refresh immediately.
+- Select a recommendation by pressing its number: `1`, `2`, or `3`.
+- Press `Space` to commit your typed prefix manually as a word.
+- Press `Backspace` to delete the last typed letter.
+- Press `Enter` to end the session and save results.
+
+The simulator writes a JSON report containing:
+
+- `topic`
+- `started_at` and `ended_at` (UTC timestamps)
+- `event_count`
+- `events[]` (one per selected/committed word), including:
+  - selection timestamp
+  - prefix at selection
+  - number of letters typed before selection
+  - shown recommendations
+  - selected recommendation index (or `null` for manual)
+  - selected word
+  - prediction latency in milliseconds
+- `final_sentence`
 
 ## API Endpoint
 
