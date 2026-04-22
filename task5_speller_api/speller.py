@@ -87,13 +87,14 @@ _PROMPT_FIXER = (
 
 
 class API:
-    _N_PREDICTIONS = 3
+    _N_PREDICTIONS = 4
     # Fallback used only when model fails AND wordlist has no prefix match.
     # Deliberately generic — callers should treat this as degraded mode.
     _FALLBACK_WORDS = ("the", "and", "of")
 
     def __init__(self, prediction_count: int = _N_PREDICTIONS):
-        self.client = get_client()
+        self.speller_client = get_client("SPELLER")
+        self.response_client = get_client("RESPONSE")
         self._N_PREDICTIONS = prediction_count
 
     # ------------------------------------------------------------------
@@ -160,6 +161,17 @@ class API:
 
         return predictions[: self._N_PREDICTIONS]
 
+    def final_answer(self, context: str, sentence: str) -> str:
+        """Generate a final free-text response based on full sentence and context."""
+        system = (
+            "You are a helpful assistant for a BCI speller. Given the user's intent "
+            "(context) and their fully-typed sentence, generate a relevant and "
+            "engaging response to display in the UI. The response should be concise "
+            "and directly related to the user's input."
+        )
+        user   = f"context: {context.strip() or '(no context)'}\nsentence: {sentence.strip()}"
+        return self._safe_call(self.response_client, system, user) or ""
+
     # ------------------------------------------------------------------
     # Agents — one prompt per task
     # ------------------------------------------------------------------
@@ -169,17 +181,17 @@ class API:
     ) -> str | None:
         system = _PROMPT_PREFIX_COMPLETION.format(n=self._N_PREDICTIONS)
         user   = f"context: {context}\nsentence: {sentence}\nprefix: {prefix}"
-        return self._safe_call(system, user)
+        return self._safe_call(self.speller_client, system, user)
 
     def _call_next_word_agent(self, sentence: str, context: str) -> str | None:
         system = _PROMPT_NEXT_WORD.format(n=self._N_PREDICTIONS)
         user   = f"context: {context}\nsentence: {sentence}"
-        return self._safe_call(system, user)
+        return self._safe_call(self.speller_client, system, user)
 
     def _call_sentence_start_agent(self, prefix: str, context: str) -> str | None:
         system = _PROMPT_SENTENCE_START.format(n=self._N_PREDICTIONS)
         user   = f"context: {context}\nprefix: {prefix}"
-        return self._safe_call(system, user)
+        return self._safe_call(self.speller_client, system, user)
 
     def _cold_start(self) -> list[str]:
         """No model call — return deterministic sentence starters.
@@ -191,11 +203,11 @@ class API:
         """
         return list(_COLD_START_DEFAULTS[: self._N_PREDICTIONS])
 
-    def _safe_call(self, system_prompt: str, user_message: str) -> str | None:
+    def _safe_call(self, client, system_prompt: str, user_message: str) -> str | None:
         """Wrapper that converts any model exception to None (-> fallback path)."""
         try:
             return get_response(
-                self.client,
+                client,
                 system_prompt=system_prompt,
                 user_message=user_message,
             )

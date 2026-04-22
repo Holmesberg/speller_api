@@ -23,18 +23,18 @@ _CLIENT_TIMEOUT_SECONDS = 5.0
 _DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 
-def _load_api_key() -> str:
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
+def _load_api_key(llm_type: str = "SPELLER") -> str:
+    key = os.environ.get(f"{llm_type}_API_KEY", "").strip()
     if not key or key.endswith("-replace-me"):
         raise RuntimeError(
-            "OPENAI_API_KEY is missing. Copy .env.example to .env and paste "
-            "your provider key (Groq by default). See KEY_SETUP.md for the "
+            f"{llm_type}_API_KEY is missing. Copy .env.example to .env and paste "
+            f"your provider key ({llm_type} by default). See KEY_SETUP.md for the "
             "walkthrough."
         )
     return key
 
 
-def _load_base_url() -> str | None:
+def _load_base_url(llm_type: str = "SPELLER") -> str | None:
     """Optional base URL override.
 
     Supports:
@@ -44,18 +44,18 @@ def _load_base_url() -> str | None:
     Leave unset to use the OpenAI SDK default.
     """
     base_url = (
-        os.environ.get("OPENAI_API_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or ""
+        os.environ.get(f"{llm_type}_API_BASE_URL") or os.environ.get(f"{llm_type}_BASE_URL") or ""
     ).strip()
     return base_url or None
 
 
 @lru_cache(maxsize=1)
-def get_client() -> OpenAI:
-    base_url = _load_base_url()
-    client = OpenAI(api_key=_load_api_key(), timeout=_CLIENT_TIMEOUT_SECONDS)
+def get_client(llm_type: str = "SPELLER") -> OpenAI:
+    base_url = _load_base_url(llm_type)
+    client = OpenAI(api_key=_load_api_key(llm_type), timeout=_CLIENT_TIMEOUT_SECONDS)
     if base_url:
         client = OpenAI(
-            api_key=_load_api_key(),
+            api_key=_load_api_key(llm_type),
             base_url=base_url,
             timeout=_CLIENT_TIMEOUT_SECONDS,
         )
