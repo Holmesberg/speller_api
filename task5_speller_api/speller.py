@@ -40,7 +40,7 @@ _PROMPT_PREFIX_COMPLETION = (
     "  1. Start exactly with the given prefix\n"
     "  2. Fit naturally as the next word in the sentence\n\n"
     "Return ONLY valid JSON: {{\"predictions\": [\"word1\", \"word2\", ...]}}\n"
-    "No explanation. No markdown. No extra keys."
+    "No explanation. No markdown. No extra keys. Only single words, no phrases."
 )
 
 # Agent 2: user is mid-sentence, no prefix typed yet
@@ -49,7 +49,7 @@ _PROMPT_NEXT_WORD = (
     "Given a sentence and optional context, return the {n} most likely English words "
     "that would naturally follow the sentence.\n\n"
     "Return ONLY valid JSON: {{\"predictions\": [\"word1\", \"word2\", ...]}}\n"
-    "No explanation. No markdown. No extra keys."
+    "No explanation. No markdown. No extra keys. Only single words, no phrases."
 )
 
 # Agent 3: sentence is empty, user has typed a prefix to start with
@@ -59,7 +59,7 @@ _PROMPT_SENTENCE_START = (
     "  1. Start exactly with the given prefix\n"
     "  2. Would naturally begin a sentence\n\n"
     "Return ONLY valid JSON: {{\"predictions\": [\"word1\", \"word2\", ...]}}\n"
-    "No explanation. No markdown. No extra keys."
+    "No explanation. No markdown. No extra keys. Only single words, no phrases."
 )
 
 
@@ -82,7 +82,25 @@ _PROMPT_FIXER = (
     "Return the {n} most common English words that start exactly with the prefix '{prefix}'.\n"
     "They must all begin with '{prefix}' — no exceptions.\n\n"
     "Return ONLY valid JSON: {{\"predictions\": [\"word1\", \"word2\", ...]}}\n"
-    "No explanation. No markdown. No extra keys."
+    "No explanation. No markdown. No extra keys. Only single words, no phrases."
+)
+
+# ---------------------------------------------------------------------------
+# Checker agent prompt
+# Fires after any main/fixer agent call if validation fails.
+# Its only job: identify and remove invalid predictions.
+# ---------------------------------------------------------------------------
+_PROMPT_CHECKER = (
+    "You are a strict output validator for a BCI speller.\n"
+    "You will receive a list of predicted words and a prefix.\n"
+    "Remove any prediction that:\n"
+    "  1. Does not start exactly with the prefix\n"
+    "  2. Is more than one word (contains spaces)\n"
+    "  3. Is a placeholder like 'word1', 'word2', 'word3', etc.\n"
+    "  4. Is not a real English word\n"
+    "Return ONLY the valid predictions as JSON: {{\"predictions\": [...]}}\n"
+    "If all predictions are invalid, return {{\"predictions\": []}}\n"
+    "No explanation. No markdown. No extra keys. Only single words, no phrases."
 )
 
 
@@ -223,6 +241,46 @@ class API:
     # Agents — one prompt per task
     # ------------------------------------------------------------------
 
+    def _validate_predictions(self, predictions: list[str], prefix: str) -> list[str]:
+        """Python-side validation — fast, runs before the checker agent.
+
+        Catches the obvious failures without a model call:
+        - Multi-word phrases (contains spaces)
+        - Template placeholders (word1, word2, word3)
+        - Wrong prefix
+        """
+        prefix_lower = prefix.lower() if prefix else ""
+        placeholder  = re.compile(r"^word\d+$", re.IGNORECASE)
+
+        def is_valid(w: str) -> bool:
+            if " " in w.strip():                              # phrase
+                return False
+            if placeholder.match(w.strip()):                  # template leak
+                return False
+            if prefix_lower and not w.lower().startswith(prefix_lower):  # wrong prefix
+                return False
+            return True
+
+        return [w for w in predictions if is_valid(w)]
+
+
+    def _call_checker_agent(
+        self, predictions: list[str], prefix: str
+    ) -> list[str]:
+        """Checker agent — fires only when Python validation already found issues.
+
+        Asks the model to clean up its own output. Intentionally lightweight:
+        no sentence context, no prediction task — purely validation.
+        Runs at most once per predict_words call (after main or fixer).
+        """
+        system = _PROMPT_CHECKER
+        user   = (
+            f"prefix: {prefix.lower() if prefix else '(empty)'}\n"
+            f"predictions: {json.dumps(predictions)}"
+        )
+        raw = self._safe_call(self.speller_client, system, user)
+        return self._parse_predictions(raw) if raw else []
+
     def _call_prefix_completion_agent(
         self, prefix: str, sentence: str, context: str
     ) -> str | None:
@@ -319,6 +377,21 @@ class API:
                 if w.lower().startswith(prefix_lower) and w.lower() not in already:
                     valid.append(w)
                     already.add(w.lower())
+
+            # 3. Run Python validator on everything collected so far
+            valid = self._validate_predictions(valid, prefix)
+
+            # 4. If still short after validation, call checker on the original raw output
+            if len(valid) < self._N_PREDICTIONS:
+                logger.info("Running checker agent — %d valid so far", len(valid))
+                checked = self._call_checker_agent(valid, prefix)
+                already = {v.lower() for v in valid}
+                for w in checked:
+                    if len(valid) >= self._N_PREDICTIONS:
+                        break
+                    if w.lower() not in already:
+                        valid.append(w)
+                        already.add(w.lower())
 
         # 3. Absolute last resort: fixer also failed or returned non-prefix words.
         #    Return the prefix itself as a word — at minimum the user sees what
